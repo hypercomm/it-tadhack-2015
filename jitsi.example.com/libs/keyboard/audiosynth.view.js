@@ -250,6 +250,8 @@ function AudioSynthView() {
 	var fnCreateKeyboard = function(keyboardElement) {
 		// Generate keyboard
 		// This is our main keyboard element! It's populated dynamically based on what you've set above.
+		var keyboardspace = document.getElementById('keyboardspace');
+		
 		visualKeyboard = document.getElementById('keyboard');
 		selectSound = document.getElementById('sound');
 		
@@ -305,8 +307,23 @@ function AudioSynthView() {
 		eb = new vertx.EventBus('/eventbus');
 		eb.onopen = function() {
 			console.log('SockJS - Connection Open');
-			eb.send('midi.to.server', {"open":clientID});
-		
+
+			eb.send('auth.to.server', {"open":clientID}, function(msg) {
+				if(msg.id == clientID) {
+					console.log('AUTH: ' + JSON.stringify(msg));
+					
+					if(msg.type == 'music') {
+						keyboardspace.style.display = 'block';
+					}
+					
+					if(msg.type == 'client') {
+						//APP.UI.setInitialMuteFromFocus(true, true);
+						APP.UI.setAudioMuted(true);
+						APP.UI.setVideoMute(true);
+					}
+				}
+			});
+			
 			eb.registerHandler('midi.to.client', function(msg) {
 				if(msg.id != clientID) {
 					console.log('VERTX PLAY: ' + JSON.stringify(msg));

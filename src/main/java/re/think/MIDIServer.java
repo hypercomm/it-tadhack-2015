@@ -7,24 +7,41 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import pt.ptinovacao.smartdata.security.Authentication;
+import pt.ptinovacao.smartdata.security.Authorization;
+import pt.ptinovacao.smartdata.security.SecurityConfig;
+import pt.ptinovacao.smartdata.security.model.SmartdataPrincipal;
 import io.vertx.core.AbstractVerticle;
+import io.vertx.core.AsyncResult;
 import io.vertx.core.DeploymentOptions;
+import io.vertx.core.Future;
+import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
+import io.vertx.core.VertxException;
 import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.shareddata.LocalMap;
 import io.vertx.ext.apex.Router;
+import io.vertx.ext.apex.handler.AuthHandler;
+import io.vertx.ext.apex.handler.BasicAuthHandler;
 import io.vertx.ext.apex.handler.BodyHandler;
 import io.vertx.ext.apex.handler.CookieHandler;
 import io.vertx.ext.apex.handler.SessionHandler;
 import io.vertx.ext.apex.handler.sockjs.BridgeOptions;
 import io.vertx.ext.apex.handler.sockjs.PermittedOptions;
-import io.vertx.ext.apex.handler.sockjs.SockJSHandler;
 import io.vertx.ext.apex.sstore.LocalSessionStore;
+import io.vertx.ext.auth.AuthProvider;
 
 public class MIDIServer extends AbstractVerticle {
+	//<user, Principal>
+	final Map<String, SmartdataPrincipal> sessions = new HashMap<>();
+	final Map<String, String> userTypes = new HashMap<>();
+	
+	final Authentication authentication = SecurityConfig.getInstance().getAuthenticationHandler();
+	final Authorization authorization = SecurityConfig.getInstance().getAuthorizationHanlder();
+	
 	public static void main(String[] args) {
 		final Vertx vertx = Vertx.vertx();
 		vertx.deployVerticle(new MIDIServer());
@@ -39,10 +56,49 @@ public class MIDIServer extends AbstractVerticle {
 		vertx.deployVerticle(new PlayVerticle(), new DeploymentOptions().setWorker(true));
 		
 		final EventBus eb = vertx.eventBus();
+		eb.consumer("auth.to.server").handler(message -> {
+			final JsonObject json = (JsonObject)message.body();
+			final String id = json.getString("open");
+			final String user = json.getString("user");
+			
+			//http://193.136.93.134:8080/smartdata-idmanagement/entity.jsp
+			//password - xpto
+			/* tim 		- music
+			 * alice 	- music
+			 * bob		- client
+			 */
+			
+			/*
+			String type = "client";
+			try {
+				SmartdataPrincipal principal = sessions.get(user);
+				principal = authorization.getGroups(principal);
+				type = principal.getGroups().get(0).getName();
+			} catch (Exception e) {
+				e.printStackTrace();
+				//default to client...
+			}
+			*/
+			
+			String type;
+			if(user.equals("tim") || user.equals("alice")) {
+				type = "music";
+			} else {
+				type = "client";
+			}
+			
+			userTypes.put(user, type);
+			out.println(user + ":" + id + " -> " + type);
+			message.reply(new JsonObject().put("id", id).put("type", type));
+		});
+		
 		eb.consumer("midi.to.server").handler(message -> {
 			final JsonObject json = (JsonObject)message.body();
 			final String id = json.getString("id");
+			final String user = json.getString("user");
 			out.println(json);
+			
+			if(userTypes.get(user).equals("client")) return; //ignore client MIDI messages, if any!
 			
 			if(json.containsKey("key")) {
 				eb.publish("midi.to.client", json);
@@ -90,16 +146,64 @@ public class MIDIServer extends AbstractVerticle {
 		
 		
 		final BridgeOptions options = new BridgeOptions();
+		options.addInboundPermitted(new PermittedOptions().setAddress("auth.to.server"));
 		options.addInboundPermitted(new PermittedOptions().setAddress("midi.to.server"));
 		options.addOutboundPermitted(new PermittedOptions().setAddressRegex(".*"));
 		
-		final SockJSHandler sockJSHandler = SockJSHandler.create(vertx);
+		final SockJSHandlerHack sockJSHandler = new SockJSHandlerHack(vertx);//SockJSHandler.create(vertx);
 		sockJSHandler.bridge(options);
+		sockJSHandler.setHook(new BridgeHook(vertx));
+		
+		final AuthProvider authProvider = new AuthProvider() {
+			@Override
+			public void login(JsonObject principal, JsonObject credentials, Handler<AsyncResult<Void>> resultHandler) {
+				//out.println("(username, password) -> (" + principal.getString("username") + ", " + credentials.getString("password") + ")");
+				
+				final String user = principal.getString("username");
+				final String pass = credentials.getString("password");
+				
+			    vertx.executeBlocking((Future<Void> fut) -> {
+			    	/*
+			    	try {
+						SmartdataPrincipal result = authentication.login(user, pass);
+						sessions.put(user, result);
+						fut.complete();
+					} catch (Exception e) {
+						throw new VertxException("Auth - Failed");
+					}
+					*/
+			    	
+			    	
+					if((user.equals("alice") || user.equals("tim") || user.equals("bob")) && pass.equals("xpto")) {
+						out.println("login - OK");
+						fut.complete();
+					} else {
+						throw new VertxException("Auth - Failed");
+					}
+					
+			    }, resultHandler);
+			}
+			
+			@Override
+			public void hasRole(JsonObject principal, String role, Handler<AsyncResult<Boolean>> resultHandler) {
+				out.println("hasRole("+role+") - username: " + principal.getString("username"));
+				resultHandler.handle(Future.succeededFuture(true)); //alternative response, non-blocking option
+			}
+			
+			@Override
+			public void hasPermission(JsonObject principal, String permission, Handler<AsyncResult<Boolean>> resultHandler) {
+				out.println("hasPermission - username: " + principal.getString("username"));
+				resultHandler.handle(Future.succeededFuture(true)); //alternative response, non-blocking option
+			}
+		};
+		
+		final AuthHandler basicAuthHandler = BasicAuthHandler.create(authProvider);
 		
 		final Router router = Router.router(vertx);
 		router.route().handler(CookieHandler.create());
 		router.route().handler(SessionHandler.create(LocalSessionStore.create(vertx)));
 		router.route().handler(BodyHandler.create());
+		router.route("/eventbus/*").handler(basicAuthHandler);
 		router.route("/eventbus/*").handler(sockJSHandler);
 		
 		final HttpServerOptions httpOptions = new HttpServerOptions();
