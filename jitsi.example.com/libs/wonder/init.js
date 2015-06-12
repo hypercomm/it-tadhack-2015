@@ -9,7 +9,7 @@ var codecChat;
 var myRtcIdentity;
 var conversation;
 /* The Resource constrains to be used for the initial call establishment. 
-*/ 
+*/
 
 var STUN = {url: "stun:150.140.184.242:3478"};
 var TURN = {
@@ -17,18 +17,18 @@ var TURN = {
     username: "wonder",
     credential: "w0nd3r"
 };
+
 var iceServers = {"iceServers": [STUN, TURN]};
 
 var constraints = [{
     constraints: "",
     type: ResourceType.CHAT,
     direction: "in_out"
-}
-];
+}];
 
-onCreateSessionDescriptionError = function(){ console.log(“Error on Session description creation”)};
-onSetSessionDescriptionError = function(){console.log(“Error on Session description assignment”)};
-onSetSessionDescriptionSuccess = function(){console.log(“Session description success”)};
+onCreateSessionDescriptionError = function(){ console.log("Error on Session description creation")};
+onSetSessionDescriptionError = function(){console.log("Error on Session description assignment")};
+onSetSessionDescriptionSuccess = function(){console.log("Session description success")};
 
 
 /* The initialization of the WONDER stack. 
@@ -75,6 +75,8 @@ function doCall(artists) {
 	- The Bye handling just performs some cleanup actions. 
 */
 function onMessage(message) {
+	console.log('RTC-MSG -> ' + JSON.stringify(message));
+	
 	switch (message.type) {
 		case MessageType.BYE:			
 			conversation = null;

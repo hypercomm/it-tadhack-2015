@@ -304,6 +304,8 @@ function AudioSynthView() {
 	
 		//MIDI from other clients...
 		clientID = createUUID();
+		
+		//var options = {protocols_whitelist: ["xhr-streaming", "xdr-streaming", "xhr-polling", "xdr-polling"], debug: true};
 		eb = new vertx.EventBus('/eventbus');
 		eb.onopen = function() {
 			console.log('SockJS - Connection Open');
@@ -311,6 +313,8 @@ function AudioSynthView() {
 			eb.send('auth.to.server', {"open":clientID}, function(msg) {
 				if(msg.id == clientID) {
 					console.log('AUTH: ' + JSON.stringify(msg));
+					
+					//initWonder(msg.user);
 					
 					if(msg.type == 'music') {
 						keyboardspace.style.display = 'block';
@@ -421,7 +425,7 @@ function AudioSynthView() {
 	var fnPlayMIDIKeyboard = function(midiKey) {
 		if(midiKeyboard[midiKey]) {
 			var key = midiKeyboard[midiKey];
-			eb.send('midi.to.server', {"id":clientID, "key":key, "event":'DOWN'});
+			eb.send('midi.to.server', {"id":clientID, "key":key, "event":'DOWN'});			
 			fnPlayKey(key, '#00ff00');
 		}
 	};
@@ -460,6 +464,9 @@ function AudioSynthView() {
 		if(keyboard[e.keyCode]) {
 			var key = keyboard[e.keyCode];
 			eb.send('midi.to.server', {"id":clientID, "key":key, "event":'DOWN'});
+			
+			//codecChat.sentMessageData({"id":clientID, "key":key, "event":'DOWN'});
+			
 			fnPlayKey(key, '#00ff00');
 		} else {
 			return false;

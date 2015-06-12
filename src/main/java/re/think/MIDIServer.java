@@ -7,10 +7,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-import pt.ptinovacao.smartdata.security.Authentication;
-import pt.ptinovacao.smartdata.security.Authorization;
-import pt.ptinovacao.smartdata.security.SecurityConfig;
-import pt.ptinovacao.smartdata.security.model.SmartdataPrincipal;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.DeploymentOptions;
@@ -36,11 +32,11 @@ import io.vertx.ext.auth.AuthProvider;
 
 public class MIDIServer extends AbstractVerticle {
 	//<user, Principal>
-	final Map<String, SmartdataPrincipal> sessions = new HashMap<>();
+	//final Map<String, SmartdataPrincipal> sessions = new HashMap<>();
 	final Map<String, String> userTypes = new HashMap<>();
 	
-	final Authentication authentication = SecurityConfig.getInstance().getAuthenticationHandler();
-	final Authorization authorization = SecurityConfig.getInstance().getAuthorizationHanlder();
+	//final Authentication authentication = SecurityConfig.getInstance().getAuthenticationHandler();
+	//final Authorization authorization = SecurityConfig.getInstance().getAuthorizationHanlder();
 	
 	public static void main(String[] args) {
 		final Vertx vertx = Vertx.vertx();
@@ -89,7 +85,7 @@ public class MIDIServer extends AbstractVerticle {
 			
 			userTypes.put(user, type);
 			out.println(user + ":" + id + " -> " + type);
-			message.reply(new JsonObject().put("id", id).put("type", type));
+			message.reply(new JsonObject().put("id", id).put("type", type). put("user", user));
 		});
 		
 		eb.consumer("midi.to.server").handler(message -> {
@@ -150,7 +146,7 @@ public class MIDIServer extends AbstractVerticle {
 		options.addInboundPermitted(new PermittedOptions().setAddress("midi.to.server"));
 		options.addOutboundPermitted(new PermittedOptions().setAddressRegex(".*"));
 		
-		final SockJSHandlerHack sockJSHandler = new SockJSHandlerHack(vertx);//SockJSHandler.create(vertx);
+		final SockJSHandlerHack sockJSHandler = new SockJSHandlerHack(vertx);
 		sockJSHandler.bridge(options);
 		sockJSHandler.setHook(new BridgeHook(vertx));
 		
